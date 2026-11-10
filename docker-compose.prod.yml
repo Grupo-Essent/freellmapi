@@ -1,0 +1,10 @@
+# Produção na EC2. O nginx do host termina TLS e encaminha para 127.0.0.1:PORT.
+# A imagem é construída neste clone (`make start`), sem puxar o GHCR upstream.
+
+include:
+  - docker-compose.yml
+
+services:
+  freellmapi:
+    image: freellmapi:local
+    pull_policy: build
