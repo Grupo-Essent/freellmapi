@@ -83,16 +83,36 @@ systemctl reload nginx
 
 CERT="/etc/letsencrypt/live/${DOMAIN}/fullchain.pem"
 if [[ ! -f "${CERT}" ]]; then
-  if ! certbot certonly --webroot -w /var/www/certbot \
-    -d "${DOMAIN}" --non-interactive --agree-tos --keep-until-expiring -m "${EMAIL}"; then
-    echo ""
-    echo "Nginx em HTTP está no ar: http://${DOMAIN} → 127.0.0.1:${PORT}"
-    echo "O certificado não saiu. No Cloudflare, crie o A de ${DOMAIN} para o IP público desta EC2"
-    echo "com a nuvem cinza (somente DNS), aguarde propagar e rode este script de novo."
-    echo "Com a nuvem laranja o desafio HTTP do Let's Encrypt não chega nesta máquina."
-    echo "Depois do certificado, a nuvem laranja pode voltar."
+  for _ in 1 2 3 4 5 6 7 8 9 10 11 12; do
+    if [[ ! -e /var/lib/letsencrypt/.certbot.lock ]]; then
+      break
+    fi
+    echo "Outro Certbot está em execução (em geral o timer de renovação). Aguardando..."
+    sleep 10
+  done
+  if [[ -e /var/lib/letsencrypt/.certbot.lock ]]; then
+    echo "O Certbot continua ocupado. Rode o setup de novo daqui a um minuto."
     exit 1
   fi
+
+  certbot_log="$(mktemp)"
+  if ! certbot certonly --webroot -w /var/www/certbot \
+    -d "${DOMAIN}" --non-interactive --agree-tos --keep-until-expiring -m "${EMAIL}" \
+    >"${certbot_log}" 2>&1; then
+    echo ""
+    echo "Nginx em HTTP está no ar: http://${DOMAIN} → 127.0.0.1:${PORT}"
+    echo "O certificado não saiu:"
+    grep -E "Detail:|Another instance|DNS problem|Hint:" "${certbot_log}" || tail -n 20 "${certbot_log}"
+    if grep -q "NXDOMAIN" "${certbot_log}"; then
+      echo "Não existe registro DNS para ${DOMAIN}. Crie o A para o IP público desta EC2 e rode o setup de novo."
+    elif grep -q "failed to download\|Some challenges have failed" "${certbot_log}"; then
+      echo "O nome precisa resolver nesta EC2 com a nuvem da Cloudflare cinza durante a emissão."
+      echo "Com a nuvem laranja o desafio HTTP não chega aqui. Depois do certificado, a nuvem laranja pode voltar."
+    fi
+    rm -f "${certbot_log}"
+    exit 1
+  fi
+  rm -f "${certbot_log}"
 fi
 
 install_proxy_conf "/etc/nginx/sites-available/${DOMAIN}"
