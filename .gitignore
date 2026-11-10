@@ -11,7 +11,7 @@ server/data/
 # Auto-generated dev encryption key (written next to the SQLite DB when
 # ENCRYPTION_KEY is unset outside production). Never commit it.
 .encryption-key
-.env
+
 .env.local
 /tunnel-client.yaml
 .DS_Store
